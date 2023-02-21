@@ -1,0 +1,3 @@
+certs:
+  cert: "/certs/tls.crt"
+  key: "/certs/tls.key"

@@ -1,0 +1,94 @@
+variables:
+  DOCKER_DRIVER: overlay2
+  DOCKER_TLS_CERTDIR: ""
+  GIT_STRATEGY: clone
+
+stages:
+  - build_dev
+  - build_main
+  - deploy_dev
+  - deploy_main
+
+services:
+  - docker:19.03.0-dind
+
+before_script:
+  - echo $CI_REGISTRY_USER
+  - echo $CI_REGISTRY_PASSWORD
+  - echo $CI_REGISTRY
+  - git config --global --add safe.directory /allcon/cicd-started
+  - echo $USER
+
+build_main:
+  image: docker:19.03.0
+  stage: build_main
+  environment:
+    name: main
+  tags:
+    - $SERVER_RUNNER
+  script:
+    - docker version
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker pull $CI_REGISTRY_IMAGE:main_latest || true
+    - docker build --cache-from $CI_REGISTRY_IMAGE:main_latest --tag $CI_REGISTRY_IMAGE:main_$CI_COMMIT_SHA --tag $CI_REGISTRY_IMAGE:main_latest .
+    - docker push $CI_REGISTRY_IMAGE:main_$CI_COMMIT_SHA
+    - docker push $CI_REGISTRY_IMAGE:main_latest
+  rules:
+    - if: $CI_COMMIT_BRANCH == 'main'
+
+build_dev:
+  image: docker:19.03.0
+  stage: build_dev
+  environment:
+    name: dev
+  tags:
+    - $SERVER_RUNNER
+  script:
+    - docker version
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
+    - docker pull $CI_REGISTRY_IMAGE:dev_latest || true
+    - docker build --cache-from $CI_REGISTRY_IMAGE:dev_latest --tag $CI_REGISTRY_IMAGE:dev_$CI_COMMIT_SHA --tag $CI_REGISTRY_IMAGE:dev_latest .
+    - docker push $CI_REGISTRY_IMAGE:dev_$CI_COMMIT_SHA
+    - docker push $CI_REGISTRY_IMAGE:dev_latest
+  rules:
+    - if: $CI_COMMIT_BRANCH == 'develop'
+
+deploy_main:
+  stage: deploy_main
+  environment:
+    name: main
+  rules:
+    - if: $CI_COMMIT_BRANCH == 'main'
+      when: manual
+  tags:
+    - $SERVER_RUNNER
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY;
+    - cd $PATH_TO_PROJECT;
+    - git pull
+    - docker compose down;
+    - docker pull $CI_REGISTRY_IMAGE:main_latest;
+    - export TAG=main_latest
+    - cat docker-compose.yml
+    - docker compose up -d;
+    - docker image prune -f;
+
+
+deploy_dev:
+  stage: deploy_dev
+  environment:
+    name: dev
+  rules:
+    - if: $CI_COMMIT_BRANCH == 'develop'
+      when: manual
+  tags:
+    - $SERVER_RUNNER
+  script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY;
+    - cd $PATH_TO_PROJECT;
+    - docker compose down;
+    - docker pull $CI_REGISTRY_IMAGE:dev_latest;
+    - export TAG=dev_latest
+    - cat docker-compose.yml
+    - docker compose up -d;
+    - docker image prune -f;

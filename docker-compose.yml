@@ -1,0 +1,10 @@
+version: "3.8"
+
+services:
+  app:
+    image: registry.gitlab.com/flythesky93/cicd-started:${TAG}
+    ports:
+      - "8100:8100"
+      - "443:443"
+    volumes:
+      - "./certs:/certs"
